@@ -1,10 +1,10 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const path = require('path');
 const dotenv = require('dotenv');
-const axios = require('axios');
-const OpenAI = require('openai');
 
 // Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '.env') });
@@ -17,8 +17,6 @@ const app = express();
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  retryWrites: true,
-  w: 'majority'
 })
   .then(() => console.log('MongoDB connected successfully'))
   .catch(err => {
@@ -27,52 +25,139 @@ mongoose.connect(process.env.MONGO_URI, {
   });
 
 // =====================
-// Session Configuration
+// User Model
+// =====================
+const UserSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  role: { type: String, enum: ['student', 'professor'], default: 'student' },
+  institution: { type: String }
+});
+
+// Hash password before saving
+UserSchema.pre('save', async function(next) {
+  if (this.isModified('password')) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+  next();
+});
+
+const User = mongoose.model('User', UserSchema);
+
+// =====================
+// Middleware
 // =====================
 app.use(express.json());
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://immersi-learn.vercel.app'], 
-  methods: ["GET", "POST", "PUT", "DELETE"],// Update this with your front-end origin
+  origin: ['http://localhost:3000', 'https://immersi-learn.vercel.app'],
+  methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
 
 // =====================
-// OpenAI (Gemini) API Helper
+// JWT Token Generator
 // =====================
-const openai = new OpenAI({
-  apiKey: process.env.GEMINI_API_KEY, // Replace with your Gemini API Key
-  baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/'
-});
+const generateToken = (user) => {
+  return jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: '1d' }
+  );
+};
 
 // =====================
-// AI Tutor Route
+// Auth Routes
 // =====================
-app.post('/api/ask', async (req, res) => {
+// Standard signup (for both students/professors)
+app.post('/api/auth/signup', async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { name, email, password, role, institution } = req.body;
 
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Messages array is required' });
+    // Validate input
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
     }
 
-    // Request to Gemini API (using OpenAI library)
-    const response = await openai.chat.completions.create({
-      model: 'gemini-2.0-flash',  // Model to use for Gemini
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        ...messages
-      ]
+    // Check if user exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+
+    // Create new user
+    const newUser = new User({
+      name,
+      email,
+      password,
+      role: role || 'student',
+      institution
     });
 
-    res.json({
-      answer: response.choices[0].message.content
+    await newUser.save();
+
+    // Generate token
+    const token = generateToken(newUser);
+
+    res.status(201).json({ 
+      success: true,
+      token,
+      role: newUser.role,
+      user: {
+        name: newUser.name,
+        email: newUser.email,
+        institution: newUser.institution
+      }
     });
-  } catch (error) {
-    console.error('AI Error:', error);
-    res.status(500).json({
-      error: 'Failed to process your question',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+  } catch (err) {
+    console.error('Signup error:', err);
+    res.status(500).json({ error: 'Registration failed. Try again.' });
+  }
+});
+
+// Professor-specific registration
+app.post('/api/professors/register', async (req, res) => {
+  try {
+    const { name, email, password, institution } = req.body;
+
+    // Validate input
+    if (!name || !email || !password || !institution) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Check if professor exists
+    const existingProfessor = await User.findOne({ email });
+    if (existingProfessor) {
+      return res.status(400).json({ error: 'Professor already registered' });
+    }
+
+    // Create professor
+    const newProfessor = new User({
+      name,
+      email,
+      password,
+      role: 'professor',
+      institution
     });
+
+    await newProfessor.save();
+
+    // Generate token
+    const token = generateToken(newProfessor);
+
+    res.status(201).json({ 
+      success: true,
+      token,
+      role: 'professor',
+      user: {
+        name: newProfessor.name,
+        email: newProfessor.email,
+        institution: newProfessor.institution
+      }
+    });
+  } catch (err) {
+    console.error('Professor registration error:', err);
+    res.status(500).json({ error: 'Professor registration failed.' });
   }
 });
 
@@ -83,15 +168,15 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
     services: {
-      database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-      geminiAPI: !!process.env.GEMINI_API_KEY ? 'available' : 'unconfigured'
+      database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
     }
   });
 });
 
+// =====================
 // Server Start
+// =====================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Gemini API ${process.env.GEMINI_API_KEY ? 'enabled' : 'disabled'}`);
 });
