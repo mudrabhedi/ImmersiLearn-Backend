@@ -7,6 +7,7 @@ require('dotenv').config();
 require('./passport'); // Import your Google strategy
 
 const app = express();
+<<<<<<< HEAD
 
 // Configure CORS
 app.use(cors({
@@ -14,6 +15,9 @@ app.use(cors({
   credentials: true,
 }));
 
+=======
+app.use(cors({ origin: "https://immersi-learn-q58d.vercel.app/" }));
+>>>>>>> 35e5e0f625ef0db46b0f4c93c461e18a9ca1bae6
 app.use(express.json());
 
 // Enable sessions
