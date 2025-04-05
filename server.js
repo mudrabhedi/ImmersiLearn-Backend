@@ -31,7 +31,8 @@ mongoose.connect(process.env.MONGO_URI, {
 // =====================
 app.use(express.json());
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://immersi-learn.vercel.app'], // Update this with your front-end origin
+  origin: ['http://localhost:3000', 'https://immersi-learn.vercel.app'], 
+  methods: ["GET", "POST", "PUT", "DELETE"],// Update this with your front-end origin
   credentials: true
 }));
 
