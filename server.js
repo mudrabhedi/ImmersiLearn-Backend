@@ -38,32 +38,6 @@ const UserSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-const QuizSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  description: String,
-  duration: { type: Number, default: 30 },
-  totalQuestions: { type: Number, default: 10 },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  createdAt: { type: Date, default: Date.now }
-});
-
-const ResourceSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  type: { type: String, enum: ['book', 'material'], required: true },
-  author: String,
-  isbn: String,
-  fileUrl: String,
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  createdAt: { type: Date, default: Date.now }
-});
-
-const AnnouncementSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  content: { type: String, required: true },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  createdAt: { type: Date, default: Date.now }
-});
-
 const LeaderboardSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   score: { type: Number, required: true },
@@ -79,9 +53,6 @@ UserSchema.pre('save', async function(next) {
 });
 
 const User = mongoose.model('User', UserSchema);
-const Quiz = mongoose.model('Quiz', QuizSchema);
-const Resource = mongoose.model('Resource', ResourceSchema);
-const Announcement = mongoose.model('Announcement', AnnouncementSchema);
 const Leaderboard = mongoose.model('Leaderboard', LeaderboardSchema);
 
 // =====================
@@ -199,115 +170,6 @@ app.post('/api/professors/register', async (req, res) => {
   } catch (err) {
     console.error('Professor registration error:', err);
     res.status(500).json({ error: 'Professor registration failed.' });
-  }
-});
-
-// =====================
-// Professor Routes
-// =====================
-app.get('/api/professor/profile', authenticate, async (req, res) => {
-  try {
-    const professor = await User.findById(req.user.id);
-    if (!professor) return res.status(404).json({ error: 'Professor not found' });
-    res.json(professor);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch profile' });
-  }
-});
-
-app.put('/api/professor/profile', authenticate, async (req, res) => {
-  try {
-    const updates = req.body;
-    const professor = await User.findByIdAndUpdate(req.user.id, updates, { new: true });
-    res.json(professor);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update profile' });
-  }
-});
-
-// =====================
-// Quiz Routes
-// =====================
-app.get('/api/professor/quizzes', authenticate, async (req, res) => {
-  try {
-    const quizzes = await Quiz.find({ createdBy: req.user.id });
-    res.json(quizzes);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch quizzes' });
-  }
-});
-
-app.post('/api/professor/quizzes', authenticate, async (req, res) => {
-  try {
-    const { title, description, duration, totalQuestions } = req.body;
-    const newQuiz = new Quiz({
-      title,
-      description,
-      duration,
-      totalQuestions,
-      createdBy: req.user.id
-    });
-    await newQuiz.save();
-    res.status(201).json(newQuiz);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to create quiz' });
-  }
-});
-
-// =====================
-// Resource Routes
-// =====================
-app.get('/api/professor/resources', authenticate, async (req, res) => {
-  try {
-    const resources = await Resource.find({ createdBy: req.user.id });
-    res.json(resources);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch resources' });
-  }
-});
-
-app.post('/api/professor/resources', authenticate, async (req, res) => {
-  try {
-    const { title, type, author, isbn, fileUrl } = req.body;
-    const newResource = new Resource({
-      title,
-      type,
-      author,
-      isbn,
-      fileUrl,
-      createdBy: req.user.id
-    });
-    await newResource.save();
-    res.status(201).json(newResource);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to create resource' });
-  }
-});
-
-// =====================
-// Announcement Routes
-// =====================
-app.get('/api/professor/announcements', authenticate, async (req, res) => {
-  try {
-    const announcements = await Announcement.find({ createdBy: req.user.id });
-    res.json(announcements);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch announcements' });
-  }
-});
-
-app.post('/api/professor/announcements', authenticate, async (req, res) => {
-  try {
-    const { title, content } = req.body;
-    const newAnnouncement = new Announcement({
-      title,
-      content,
-      createdBy: req.user.id
-    });
-    await newAnnouncement.save();
-    res.status(201).json(newAnnouncement);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to create announcement' });
   }
 });
 
