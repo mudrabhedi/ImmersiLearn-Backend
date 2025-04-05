@@ -34,7 +34,6 @@ if (process.env.GOOGLE_CLIENT_ID) {
   console.warn('⚠️ Google OAuth disabled - missing GOOGLE_CLIENT_ID');
 }
 
-// Serialize/deserialize user
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
@@ -44,7 +43,7 @@ passport.deserializeUser(async (id, done) => {
     const user = await User.findById(id);
     done(null, user);
   } catch (err) {
-    done(err, null);
+    done(err);
   }
 });
 module.exports = passport;
